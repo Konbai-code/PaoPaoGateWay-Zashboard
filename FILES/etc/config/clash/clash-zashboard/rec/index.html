@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NET REC</title>
+    <style>
+        body {
+            font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #fff;
+            color: #333;
+        }
+
+        h1 {
+            color: #a72a17;
+            margin-bottom: 20px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 80%;
+            margin: 0 auto 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        /* 设置最后三列宽度一致 */
+        td:nth-last-child(-n+3),
+        th:nth-last-child(-n+3) {
+            width: 120px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>NET REC</h1>
+    <table id="csvTable"></table>
+    <script>
+        const table = document.getElementById("csvTable");
+
+        function refreshTable(url) {
+            fetch(url)
+                .then(res => {
+                    if (!res.ok) throw new Error(res.status);
+                    return res.text();
+                })
+                .then(text => {
+                    const rows = text.trim().split("\n");
+                    table.innerHTML = "";
+                    rows.forEach((row, idx) => {
+                        if (!row) return;
+                        const tr = document.createElement("tr");
+                        row.split(",").forEach(cellText => {
+                            const cell = document.createElement(idx === 0 ? "th" : "td");
+                            cell.textContent = cellText;
+                            tr.appendChild(cell);
+                        });
+                        table.appendChild(tr);
+                    });
+                })
+                .catch(err => console.error("Failed to load CSV file:", err));
+        }
+
+        function loadData() {
+            refreshTable("/ui/rec_data/data.csv");
+        }
+
+        window.onload = () => {
+            loadData();
+            setInterval(loadData, 3000);
+        };
+    </script>
+</body>
+
+</html>
