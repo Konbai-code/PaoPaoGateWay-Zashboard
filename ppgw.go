@@ -518,7 +518,7 @@ func main() {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		} else {
-			fmt.Println(green + "[PaoPaoGW Get]" + reset + "Download: OK!")
+			//fmt.Println(green + "[PaoPaoGW Get]" + reset + "Download: OK!")
 			os.Exit(0)
 		}
 	}
@@ -782,11 +782,11 @@ func (d *Downloader) Download() error {
 	req.Header.Set("User-Agent", d.UserAgent)
 
 	host := req.URL.Hostname()
-	addrs, err := net.LookupHost(host)
+	//addrs, err := net.LookupHost(host)
 	if err != nil {
 		return fmt.Errorf(red+"[PaoPaoGW Get]"+reset+host+"failed to perform DNS lookup: %v", err)
 	}
-	fmt.Println(orange+"[PaoPaoGW Get]"+reset+"HOST:"+host+" IP:", strings.Join(addrs, ", "))
+	//fmt.Println(orange+"[PaoPaoGW Get]"+reset+"HOST:"+host+" IP:", strings.Join(addrs, ", "))
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -798,8 +798,8 @@ func (d *Downloader) Download() error {
 		return fmt.Errorf(red+"[PaoPaoGW Get]"+reset+host+" request failed with status code %d", resp.StatusCode)
 	}
 
-	finalURL := resp.Request.URL.String()
-	fmt.Println(orange+"[PaoPaoGW Get]"+reset+"URL:", finalURL)
+	//finalURL := resp.Request.URL.String()
+	//fmt.Println(orange+"[PaoPaoGW Get]"+reset+"URL:", finalURL)
 
 	file, err := os.Create(d.OutputFile)
 	if err != nil {

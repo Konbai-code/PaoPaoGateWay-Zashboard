@@ -370,7 +370,6 @@ gen_ovpn_hash() {
 }
 
 get_conf() {
-    net_ready
     sleep 1
     down_url=$1
     down_type=$2
@@ -473,7 +472,6 @@ get_conf() {
 }
 
 try_conf() {
-    net_ready
     export gw=$(ip route show | grep "default via" | head -1 | grep -Eo "$IPREX4" | head -1)
     dns1=$(grep nameserver /etc/resolv.conf | grep -Eo "$IPREX4" | head -1)
     dns2=$(grep nameserver /etc/resolv.conf | grep -Eo "$IPREX4" | tail -1)
@@ -513,7 +511,7 @@ try_conf() {
         get_conf "http://""$try_succ_host":"$conf_port""/""$conf_name" "$down_type"
     fi
     if [ "$?" = "1" ] || [ -z "$try_succ_host" ]; then
-        paopao=$(ppgw -rawURL "http://paopao.dns" | cut -d" " -f1)
+        paopao=$(nslookup paopao.dns | grep 'Address:' | tail -1 | awk '{ print $2 }')
         try_host=$paopao
         log "Try[1] to get ""$conf_name"" from paopao.dns"
         get_conf "http://paopao.dns":"$conf_port""/""$conf_name" "$down_type"
