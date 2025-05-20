@@ -8,9 +8,9 @@ bind-address: '127.0.0.1'
 mode: {clashmode}
 external-controller: 0.0.0.0:{clash_web_port}
 #interface-name: tun114
-external-ui: /etc/config/clash/clash-dashboard
+external-ui: /etc/config/clash/clash-zashboard
 secret: {clash_web_password}
-log-level: info
+log-level: warning
 ipv6: false
 profile:
   store-fake-ip: true
@@ -32,10 +32,10 @@ dns:
 tls:
 external-controller-tls:
 external-ui-name:
-external-ui-url:
+external-ui-url: "https://invalid.local/update-disabled.zip"
+unified-delay: true
 tun:
   enable: false
-ebpf:
 sniffer:
   enable: false
 listeners:

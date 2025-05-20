@@ -194,7 +194,6 @@ func main() {
 				}
 				defer conn.Close(websocket.StatusInternalError, "PPGW NET_REC ERR")
 
-				// Increase the read limit
 				conn.SetReadLimit(10 * 1024 * 1024)
 
 				for {
@@ -213,30 +212,43 @@ func main() {
 						}
 
 						lastInfo, exists := lastConnectionInfoMap[connection.ID]
+						currentDownload := int64(connection.Download)
+						currentUpload := int64(connection.Upload)
+
 						if !exists {
+							// 首次出现，记录当前状态
 							lastConnectionInfoMap[connection.ID] = LastConnectionInfo{
-								LastDownloadTotal: int64(connection.Download),
-								LastUploadTotal:   int64(connection.Upload),
+								LastDownloadTotal: currentDownload,
+								LastUploadTotal:   currentUpload,
 							}
 						} else {
-							download := int64(connection.Download) - lastInfo.LastDownloadTotal
-							upload := int64(connection.Upload) - lastInfo.LastUploadTotal
+							downloadDelta := currentDownload - lastInfo.LastDownloadTotal
+							uploadDelta := currentUpload - lastInfo.LastUploadTotal
+
+							// 避免负数（如连接重置）
+							if downloadDelta < 0 {
+								downloadDelta = 0
+							}
+							if uploadDelta < 0 {
+								uploadDelta = 0
+							}
 
 							if domainInfo, ok := domainInfoMap[destination]; ok {
-								domainInfo.Download += download
-								domainInfo.Upload += upload
+								domainInfo.Download += downloadDelta
+								domainInfo.Upload += uploadDelta
 							} else {
 								domainInfoMap[destination] = &DomainInfo{
 									Domain:   destination,
-									Download: download,
-									Upload:   upload,
+									Download: downloadDelta,
+									Upload:   uploadDelta,
 									ClientIP: connection.Metadata.SourceIP,
 								}
 							}
 
+							// 更新最新值
 							lastConnectionInfoMap[connection.ID] = LastConnectionInfo{
-								LastDownloadTotal: int64(connection.Download),
-								LastUploadTotal:   int64(connection.Upload),
+								LastDownloadTotal: currentDownload,
+								LastUploadTotal:   currentUpload,
 							}
 						}
 					}
@@ -261,6 +273,7 @@ func main() {
 				}
 			}
 		}()
+
 		for range time.Tick(3 * time.Second) {
 			mutex.Lock()
 			domainInfoList = nil
@@ -268,17 +281,21 @@ func main() {
 				domainInfoList = append(domainInfoList, *info)
 			}
 			sort.Sort(domainInfoList)
-			recPath := "/etc/config/clash/clash-dashboard/rec_data/" + reckey
+
+			recPath := "/etc/config/clash/clash-zashboard/rec_data"
 			os.MkdirAll(recPath, 0755)
+
 			newFilePath := recPath + "/data.csv.new"
 			oldFilePath := recPath + "/data.csv.old"
 			currentFilePath := recPath + "/data.csv"
+
 			file, err := os.Create(newFilePath)
 			if err != nil {
 				fmt.Printf("\n" + red + "[PaoPaoGW REC]" + reset + "Failed to create CSV file.\n")
 				mutex.Unlock()
 				continue
 			}
+
 			defer file.Close()
 			writer := csv.NewWriter(file)
 			if err := writer.Write([]string{"Domain", "Download", "Upload", "ClientIP"}); err != nil {
@@ -297,10 +314,10 @@ func main() {
 				fmt.Printf("\n" + red + "[PaoPaoGW REC]" + reset + "Error flushing CSV data.\n")
 			}
 			file.Close()
+
 			if _, err := os.Stat(currentFilePath); err == nil {
 				os.Rename(currentFilePath, oldFilePath)
 			}
-
 			if err := os.Rename(newFilePath, currentFilePath); err != nil {
 				fmt.Printf("\n" + red + "[PaoPaoGW REC]" + reset + "Failed to replace CSV file.\n")
 				os.Rename(oldFilePath, currentFilePath)
@@ -1077,7 +1094,7 @@ func selectNode(apiURL, secret, nodeName string) error {
 
 func reloadYaml(apiURL, secret string) error {
 	client := &http.Client{}
-	data := []byte(fmt.Sprintf(`{"path":"/tmp/clash.yaml"}`))
+	data := []byte(fmt.Sprintf(`{"path":"/etc/config/clash/config.yaml"}`))
 	req, err := http.NewRequest("PUT", apiURL+"/configs", strings.NewReader(string(data)))
 	if err != nil {
 		return err

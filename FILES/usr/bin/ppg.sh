@@ -63,7 +63,7 @@ fast_node_sel() {
         clash_web_password="clashpass"
     fi
     if [ -z "$test_node_url" ]; then
-        test_node_url="https://www.youtube.com/generate_204"
+        test_node_url="https://www.gstatic.com/generate_204"
     fi
     if [ -z "$ext_node" ]; then
         ext_node="Traffic|Expire| GB|Days|Date"
@@ -73,7 +73,7 @@ fast_node_sel() {
     fi
     cpudelay=$(echo $cpudelay | grep -Eo "[0-9]+" | head -1)
     log "Try to test node...[""$try_count""]" warn
-    ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$(getsha256 "$clash_web_password")" -test_node_url="$test_node_url" -ext_node="$ext_node" -waitdelay="$wait_delay" -cpudelay="$cpudelay" >/dev/tty0
+    ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$clash_web_password" -test_node_url="$test_node_url" -ext_node="$ext_node" -waitdelay="$wait_delay" -cpudelay="$cpudelay" >/dev/tty0
     if [ "$?" = "1" ]; then
         touch /tmp/allnode.failed
     fi
@@ -101,28 +101,33 @@ kill_netrec() {
     fi
 }
 load_netrec() {
-    if ps | grep -v "grep" | grep "d /etc/config/clash"; then
-        if ps | grep -v "grep" | grep "wsPort"; then
+    if pgrep -f "d /etc/config/clash" >/dev/null; then
+        if pgrep -f "wsPort" >/dev/null; then
             echo "PPGW REC RUNNING."
         else
-            if [ -f /tmp/ppgw.ini ]; then
-                . /tmp/ppgw.ini 2>/dev/tty0
-            fi
-            if [ -z "$max_rec" ]; then
-                max_rec="5000"
-            fi
-            mkdir -p /etc/config/clash/clash-dashboard/rec_data
-            rm -rf /etc/config/clash/clash-dashboard/rec_data
-            mkdir -p /etc/config/clash/clash-dashboard/rec_data
+            [ -f /tmp/ppgw.ini ] && . /tmp/ppgw.ini 2>/dev/tty0
+
+            : "${max_rec:=5000}"
+
+            rec_dir="/etc/config/clash/clash-zashboard/rec_data"
+            rm -rf "$rec_dir"
+            mkdir -p "$rec_dir"
+
             rec_stamp=$(date +%s)$(cat /dev/urandom | tr -cd 'a-zA-Z0-9' | head -c 64)
-            echo "{\"reckey\": \"$rec_stamp\"}" >/etc/config/clash/clash-dashboard/reckey.json
-            reckey=$(getsha256 "$rec_stamp""$(getsha256 "$clash_web_password")")
-            /usr/bin/ppgw -wsPort="$clash_web_port" -secret="$(getsha256 "$clash_web_password")" -net_rec_num="$max_rec" -reckey="$reckey" >/dev/tty0 2>&1 &
+            echo "{\"reckey\": \"$rec_stamp\"}" >"/etc/config/clash/clash-zashboard/reckey.json"
+            reckey=$(getsha256 "$rec_stamp$clash_web_password")
+
+            /usr/bin/ppgw \
+                -wsPort="$clash_web_port" \
+                -secret="$clash_web_password" \
+                -net_rec_num="$max_rec" \
+                -reckey="$reckey" \
+                >/dev/tty0 2>&1 &
         fi
     fi
 }
 load_clash() {
-    if [ -f /tmp/clash.yaml ]; then
+    if [ -f /etc/config/clash/config.yaml ]; then
         log "Loading clash..." warn
         # ulimit
         if [ "$(ulimit -n)" -gt 999999 ]; then
@@ -135,7 +140,7 @@ load_clash() {
             . /tmp/ppgw.ini 2>/dev/tty0
         fi
         if [ -z "$test_node_url" ]; then
-            test_node_url="https://www.youtube.com/generate_204"
+            test_node_url="https://www.gstatic.com/generate_204"
         fi
         if [ -z "$clash_web_port" ]; then
             clash_web_port="80"
@@ -146,21 +151,20 @@ load_clash() {
         if [ -z "$fall_direct" ]; then
             fall_direct="no"
         fi
-        sed "s|https://www.youtube.com/generate_204|$test_node_url|g" /etc/config/clash/clash-dashboard/index_base.html >/etc/config/clash/clash-dashboard/index.html
         closeall_flag="yes"
         log "[VERSION] :""$(clash -v)" succ
         echo "127.0.0.1 localhost" >/etc/hosts
-        grep -Eo '[https]+://[a-zA-Z0-9.-]+' "/tmp/clash.yaml" | while read -r down_url; do
+        grep -Eo '[https]+://[a-zA-Z0-9.-]+' "/etc/config/clash/config.yaml" | while read -r down_url; do
             genHost=$(ppgw -server "$dns_ip" -port "$dns_port" -rawURL "$down_url")
             echo "$genHost" >>/etc/hosts
         done
         if ps | grep -v "grep" | grep "d /etc/config/clash"; then
-            now_node_before=$(ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$(getsha256 "$clash_web_password")" -now_node)
+            now_node_before=$(ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$clash_web_password" -now_node)
             if [ "$?" = "1" ]; then
                 now_node_before="now_node_before"
             fi
-            ppgw -reload -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$(getsha256 "$clash_web_password")" >/dev/tty0 2>&1
-            now_node_after=$(ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$(getsha256 "$clash_web_password")" -now_node)
+            ppgw -reload -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$clash_web_password" >/dev/tty0 2>&1
+            now_node_after=$(ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$clash_web_password" -now_node)
             if [ "$?" = "1" ]; then
                 now_node_after="now_node_after"
             fi
@@ -174,30 +178,16 @@ load_clash() {
                 fi
             fi
             if [ "$closeall_flag" = "yes" ]; then
-                ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$(getsha256 "$clash_web_password")" -closeall >/dev/tty0
+                ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$clash_web_password" -closeall >/dev/tty0
             fi
         else
             sync_ntp
-            /usr/bin/clash -d /etc/config/clash -f /tmp/clash.yaml >/dev/tty0 2>&1 &
+            /usr/bin/clash -d /etc/config/clash -f /etc/config/clash/config.yaml >/dev/tty0 2>&1 &
         fi
     else
         log "The clash.yaml generation failed." warn
         return 1
     fi
-    clash_start_time=$(date +%s)
-    while true; do
-        ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$(getsha256 "$clash_web_password")" -now_node
-        if [ $? -eq 0 ]; then
-            echo "clash api ok."
-            break
-        fi
-        clash_current_time=$(date +%s)
-        if [ $((clash_current_time - clash_start_time)) -ge 10 ]; then
-            echo "clash api timeout."
-            break
-        fi
-        sleep 1
-    done
     if ps | grep -v "grep" | grep "d /etc/config/clash" && [ "$1" = "yes" ]; then
         fast_node_sel 1500 1
         if [ -f /tmp/allnode.failed ]; then
@@ -222,7 +212,7 @@ load_clash() {
         fi
         if [ -f /tmp/allnode.failed ]; then
             if [ "$fall_direct" = "yes" ]; then
-                ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$(getsha256 "$clash_web_password")" -spec_node="DIRECT" >/dev/tty0
+                ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$clash_web_password" -spec_node="DIRECT" >/dev/tty0
                 www_test=$(ppgw -testProxy http://127.0.0.1:1080 -test_node_url "http://120.53.53.53")
                 if [ $? -eq 0 ]; then
                     log "[fall_direct] Switch to DIRECT." succ
@@ -236,11 +226,11 @@ load_clash() {
         fi
     else
         if ps | grep -v "grep" | grep "d /etc/config/clash" && [ "$mode" = "socks5" ]; then
-            ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$(getsha256 "$clash_web_password")" -spec_node="ppgwsocks" >/dev/tty0
+            ppgw -apiurl="http://127.0.0.1:""$clash_web_port" -secret="$clash_web_password" -spec_node="ppgwsocks" >/dev/tty0
         fi
     fi
     if ps | grep -v "grep" | grep "d /etc/config/clash" && [ "$2" = "no" ]; then
-        if nft list ruleset | grep "clashtcp"; then
+        if nft list ruleset | grep -q "clashtcp"; then
             log "[OK] nft rule TCP OK." succ
 
         else
@@ -652,18 +642,18 @@ reload_gw() {
     sed -i "s/{clash_web_port}/$clash_web_port/g" /tmp/clash_base.yaml
     sed -i "s/{dns_ip}/$dns_ip/g" /tmp/clash_base.yaml
     sed -i "s/{dns_port}/$dns_port/g" /tmp/clash_base.yaml
-    sed -i "s/{clash_web_password}/$(getsha256 "$clash_web_password")/g" /tmp/clash_base.yaml
+    sed -i "s/{clash_web_password}/$clash_web_password/g" /tmp/clash_base.yaml
     sed -i "s/{openport}/$openport/g" /tmp/clash_base.yaml
     sed -i "s/127.0.0.1/0.0.0.0/g" /tmp/clash_base.yaml
-    if [ -e "/tmp/clash.yaml" ]; then
-        rm "/tmp/clash.yaml"
+    if [ -e "/etc/config/clash/config.yaml" ]; then
+        rm "/etc/config/clash/config.yaml"
     fi
     if [ "$mode" = "socks5" ]; then
         sed -i "s/{clashmode}/global/g" /tmp/clash_base.yaml
         sed 's/\r/\n/g' /etc/config/clash/socks5.yaml >/tmp/clash_socks5.yaml
         sed -i "s/{socks5_ip}/$socks5_ip/g" /tmp/clash_socks5.yaml
         sed -i "s/{socks5_port}/$socks5_port/g" /tmp/clash_socks5.yaml
-        ppgw -input /tmp/clash_socks5.yaml -input /tmp/clash_base.yaml -output /tmp/clash.yaml
+        ppgw -input /tmp/clash_socks5.yaml -input /tmp/clash_base.yaml -output /etc/config/clash/config.yaml
     fi
     if [ "$mode" = "yaml" ]; then
         try_conf "$yamlfile" "yaml"
@@ -672,7 +662,7 @@ reload_gw() {
         try_conf "$ovpnfile" "ovpn"
         sed -i "s/{clashmode}/direct/g" /tmp/clash_base.yaml
         sed -i "s/#interface-name/interface-name/g" /tmp/clash_base.yaml
-        cat /tmp/clash_base.yaml >/tmp/clash.yaml
+        cat /tmp/clash_base.yaml >/etc/config/clash/config.yaml
         kill_ovpn
         load_ovpn
     fi
@@ -703,13 +693,13 @@ reload_gw() {
         fi
         if [ -f /tmp/paopao_custom.yaml ]; then
             sed -i "s/{clashmode}/$clashmode/g" /tmp/clash_base.yaml
-            ppgw -input /tmp/paopao_custom.yaml -input /tmp/clash_base.yaml -output /tmp/clash.yaml
+            ppgw -input /tmp/paopao_custom.yaml -input /tmp/clash_base.yaml -output /etc/config/clash/config.yaml
         fi
     fi
 
     if [ "$mode" = "free" ]; then
         sed -i "s/{clashmode}/direct/g" /tmp/clash_base.yaml
-        cat /tmp/clash_base.yaml >/tmp/clash.yaml
+        cat /tmp/clash_base.yaml >/etc/config/clash/config.yaml
     fi
     log "Load clash config..." warn
     if [ -z "$fast_node" ]; then
@@ -723,9 +713,9 @@ reload_gw() {
     if [ "$mode" = "yaml" ] || [ "$mode" = "suburl" ]; then
         if [ "$fast_node" = "yes" ]; then
             if [ "$dns_burn" = "yes" ]; then
-                ppgw -dnslist "$dns_ip"":""$dns_port"",""$ex_dns" -dnsinput /tmp/clash.yaml -output /tmp/clash_dnsburn.yaml
+                ppgw -dnslist "$dns_ip"":""$dns_port"",""$ex_dns" -dnsinput /etc/config/clash/config.yaml -output /tmp/clash_dnsburn.yaml
                 if grep -q tproxy-port /tmp/clash_dnsburn.yaml; then
-                    cat /tmp/clash_dnsburn.yaml >/tmp/clash.yaml
+                    cat /tmp/clash_dnsburn.yaml >/etc/config/clash/config.yaml
                 fi
             fi
         fi
@@ -861,7 +851,7 @@ while true; do
         echo "Clash running OK."
         if [ "$fast_node" = "yes" ] || [ "$fast_node" = "check" ]; then
             if [ -z "$test_node_url" ]; then
-                test_node_url="https://www.youtube.com/generate_204"
+                test_node_url="https://www.gstatic.com/generate_204"
             fi
             proxytest=$(ppgw -testProxy http://127.0.0.1:1080 -test_node_url "$test_node_url")
             if [ $? -eq 0 ]; then
